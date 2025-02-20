@@ -5,6 +5,7 @@
 import 'dart:convert';
 
 import 'package:devtools_app_shared/ui.dart';
+import 'package:devtools_app_shared/utils.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -113,8 +114,19 @@ class FileImportContainer extends StatefulWidget {
   State<FileImportContainer> createState() => _FileImportContainerState();
 }
 
-class _FileImportContainerState extends State<FileImportContainer> {
+class _FileImportContainerState extends State<FileImportContainer>
+    with AutoDisposeMixin {
   DevToolsJsonFile? importedFile;
+
+  final controller = TextEditingController();
+
+  late String currentText;
+
+  @override
+  void dispose() {
+    controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -195,12 +207,22 @@ class _FileImportContainerState extends State<FileImportContainer> {
     return Row(
       children: [
         Expanded(
-          child: Text(
-            importedFile?.path ?? 'No File Selected',
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).regularTextStyle,
-            textAlign: TextAlign.left,
+          child: DevToolsClearableTextField(
+            controller: controller,
+            hintText: 'No File Selected',
+            enabled: true,
+            labelText: 'Path to app size file',
+            roundedBorder: true,
+            onChanged: (v) async {
+              await _importFileFromText();
+            },
           ),
+          // child: Text(
+          //   importedFile?.path ?? 'No File Selected',
+          //   overflow: TextOverflow.ellipsis,
+          //   style: Theme.of(context).regularTextStyle,
+          //   textAlign: TextAlign.left,
+          // ),
         ),
         if (importedFile != null)
           InputDecorationSuffixButton.clear(onPressed: _clearFile),
@@ -241,6 +263,8 @@ class _FileImportContainerState extends State<FileImportContainer> {
     );
     if (importedFile != null) {
       _handleImportedFile(importedFile);
+      final path = importedFile.path;
+      controller.value = TextEditingValue(text: path);
     }
   }
 
@@ -248,6 +272,7 @@ class _FileImportContainerState extends State<FileImportContainer> {
     if (mounted) {
       setState(() {
         importedFile = null;
+        controller.clear();
       });
     }
     if (widget.onFileCleared != null) {
@@ -268,6 +293,27 @@ class _FileImportContainerState extends State<FileImportContainer> {
       widget.onFileSelected!(file);
     }
   }
+
+  Future<void> _importFileFromText() async {
+    if (importedFile == null) {
+      final path = controller.text.trim();
+      if (path.isNotEmpty && path.endsWith('json')) {
+        await convertPathToXFile(path).then(
+          (value) => () {
+            print(path);
+            _handleImportedFile(value!);
+          },
+        );
+      }
+    }
+  }
+}
+
+Future<DevToolsJsonFile?> convertPathToXFile(path) async {
+  print("path: " + path);
+  final file = XFile(path);
+  print("file: " + file.path);
+  return await toDevToolsFile(file);
 }
 
 Future<DevToolsJsonFile?> importFileFromPicker({
